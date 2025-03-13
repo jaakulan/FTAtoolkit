@@ -1,0 +1,18 @@
+[
+    { "name": "Pierre Elliott Trudeau High School", "lat": 43.8765, "lng": -79.3166 },
+    { "name": "Armadale Public School", "lat": 43.8325, "lng": -79.2676 },
+    { "name": "Cedarwood Public School", "lat": 43.8362, "lng": -79.2628 },
+    { "name": "Coppard Glen Public School", "lat": 43.8397, "lng": -79.2840 },
+    { "name": "Markham Gateway Public School", "lat": 43.8383, "lng": -79.2756 },
+    { "name": "Ellen Fairclough Public School", "lat": 43.8451, "lng": -79.2849 },
+    { "name": "Ashton Meadows Public School", "lat": 43.8532, "lng": -79.3601 },
+    { "name": "Beckett Farm Public School", "lat": 43.8750, "lng": -79.3361 },
+    { "name": "Castlemore Public School", "lat": 43.8893, "lng": -79.3126 },
+    { "name": "Stonebridge Public School", "lat": 43.8759, "lng": -79.3215 },
+    { "name": "Milliken Mills Public School", "lat": 43.8320, "lng": -79.3238 },
+    { "name": "Sir Wilfrid Laurier Public School", "lat": 43.8663, "lng": -79.3057 },
+    { "name": "Glad Park Public School", "lat": 43.9681, "lng": -79.2508 },
+    { "name": "Harry Bowes Public School", "lat": 43.9637, "lng": -79.2716 },
+    { "name": "Oscar Peterson Public School", "lat": 43.9513, "lng": -79.2745 },
+    { "name": "Stouffville District Secondary School", "lat": 43.9653, "lng": -79.2447 }
+  ]
