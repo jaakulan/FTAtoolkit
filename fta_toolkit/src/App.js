@@ -5,17 +5,6 @@ const apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
 const libraries = ["places", "geometry"];
 const mapContainerStyle = { width: "100%", height: "100vh" };
 const center = { lat: 43.8561, lng: -79.337 };
-const routeApiUrl = 'https://routes.googleapis.com/directions/v2:computeRoutes';
-
-// Function to generate distinct colors for polylines
-const generateColors = (count) => {
-  const colors = [];
-  for (let i = 0; i < count; i++) {
-    const hue = (i * 360) / count; // Distribute hues evenly
-    colors.push(`hsl(${hue}, 100%, 50%)`);
-  }
-  return colors;
-};
 
 const App = () => {
   const [schools, setSchools] = useState([]);
@@ -23,6 +12,8 @@ const App = () => {
   const [homeLocation, setHomeLocation] = useState(null);
   const [routeSegments, setRouteSegments] = useState([]);
   const [currentSegment, setCurrentSegment] = useState(0);
+  const [totalDistance, setTotalDistance] = useState(0);
+  const [distanceOption, setDistanceOption] = useState("inputtedDistance");
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -61,7 +52,14 @@ const App = () => {
 
     const waypoints = selectedSchools
       .filter((s) => s.name !== homeLocation.name)
-      .map((s) => ({ location: { lat: s.lat, lng: s.lng } }));
+      .map((s) => ({
+        location: {
+          latLng: {
+            latitude: s.lat,
+            longitude: s.lng,
+          },
+        },
+      }));
 
     try {
       const routesRequest = {
@@ -69,72 +67,73 @@ const App = () => {
           location: {
             latLng: {
               latitude: homeLocation.lat,
-              longitude: homeLocation.lng
-            }
-          }
+              longitude: homeLocation.lng,
+            },
+          },
         },
         destination: {
           location: {
             latLng: {
               latitude: homeLocation.lat,
-              longitude: homeLocation.lng
-            }
-          }
+              longitude: homeLocation.lng,
+            },
+          },
         },
-        intermediates: waypoints.map(w => ({
-          location: {
-            latLng: {
-              latitude: w.location.lat,
-              longitude: w.location.lng
-            }
-          }
-        })),
-        travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_AWARE',
+        intermediates: waypoints,
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE",
         computeAlternativeRoutes: false,
         routeModifiers: {
-          avoidTolls: false,
+          avoidTolls: true,
           avoidHighways: false,
-          avoidFerries: false
+          avoidFerries: false,
         },
-        languageCode: 'en-US',
-        units: 'IMPERIAL'
+        languageCode: "en-US",
+        units: "IMPERIAL",
       };
 
-      const response = await fetch(routeApiUrl, {
-        method: 'POST',
+      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'routes.legs.steps.polyline.encodedPolyline'
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "routes.legs.steps.polyline.encodedPolyline",
         },
-        body: JSON.stringify(routesRequest)
+        body: JSON.stringify(routesRequest),
       });
 
-      if (!response.ok) throw new Error('Route calculation failed');
-      
-      const data = await response.json();
-      const { encoding } = await google.maps.importLibrary('geometry');
+      if (!response.ok) throw new Error("Route calculation failed");
 
-      // Process route into segments
+      const data = await response.json();
+
       const legs = data.routes[0].legs;
-      const colors = generateColors(legs.length); // Generate colors dynamically
+      const colors = generateColors(legs.length);  // Generate colors for the segments
       const segments = legs.map((leg, i) => {
         const segmentPath = [];
+        let segmentDistance = 0;
+
         for (const step of leg.steps) {
-          const decodedPath = encoding.decodePath(step.polyline.encodedPolyline);
+          const decodedPath = window.google.maps.geometry.encoding.decodePath(step.polyline.encodedPolyline);
           segmentPath.push(...decodedPath);
+          for (let j = 0; j < decodedPath.length - 1; j++) {
+            const pointA = decodedPath[j];
+            const pointB = decodedPath[j + 1];
+            segmentDistance += window.google.maps.geometry.spherical.computeDistanceBetween(pointA, pointB);
+          }
         }
+
         return {
           path: segmentPath,
           color: colors[i],
-          visible: true, // All segments are visible initially
-          isActive: false // Initially grayed out
+          distance: segmentDistance,
+          visible: true,
+          isActive: false,
         };
       });
 
       setRouteSegments(segments);
       setCurrentSegment(0);
+      setTotalDistance(segments.reduce((acc, seg) => acc + seg.distance, 0));
 
     } catch (error) {
       console.error("Route calculation error:", error);
@@ -144,24 +143,42 @@ const App = () => {
 
   const advanceToNextSegment = () => {
     if (currentSegment < routeSegments.length) {
-      setRouteSegments(prev =>
+      setRouteSegments((prev) =>
         prev.map((seg, i) =>
           i === currentSegment ? { ...seg, isActive: true } : seg
         )
       );
-      setCurrentSegment(prev => prev + 1);
+      setCurrentSegment((prev) => prev + 1);
+      updateTotalDistance();
     }
   };
 
   const goBackToPreviousSegment = () => {
     if (currentSegment > 0) {
-      setRouteSegments(prev =>
+      setRouteSegments((prev) =>
         prev.map((seg, i) =>
           i === currentSegment - 1 ? { ...seg, isActive: false } : seg
         )
       );
-      setCurrentSegment(prev => prev - 1);
+      setCurrentSegment((prev) => prev - 1);
+      updateTotalDistance();
     }
+  };
+
+  const updateTotalDistance = () => {
+    const activeSegments = routeSegments.slice(0, currentSegment + 1);
+    const total = activeSegments.reduce((acc, seg) => acc + seg.distance, 0);
+    setTotalDistance(total);
+  };
+
+  const generateColors = (num) => {
+    const colors = [];
+    for (let i = 0; i < num; i++) {
+      // Generate a random color in hex format
+      const color = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+      colors.push(color);
+    }
+    return colors;
   };
 
   return (
@@ -184,30 +201,35 @@ const App = () => {
               </li>
             ))}
           </ul>
-          <button onClick={calculateRoute}>Calculate Route</button>
-          <button 
-            onClick={goBackToPreviousSegment}
-            disabled={currentSegment <= 0}
-          >
-            Go Back
+          <div style={{ marginBottom: "10px" }}>
+            <select
+              value={distanceOption}
+              onChange={(e) => setDistanceOption(e.target.value)}
+              style={{ width: "100%", padding: "8px" }}
+            >
+              <option value="inputtedDistance">Inputted Distance</option>
+              <option value="minDistance">Min Distance</option>
+              <option value="maxDistance">Max Distance</option>
+            </select>
+          </div>
+          <button onClick={calculateRoute} style={{ width: "100%", marginBottom: "10px" }}>
+            Calculate Route
           </button>
-          <button 
-            onClick={advanceToNextSegment}
-            disabled={currentSegment >= routeSegments.length}
-          >
-            Next School
-          </button>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <button onClick={goBackToPreviousSegment} disabled={currentSegment <= 0}>
+              Go Back
+            </button>
+            <button onClick={advanceToNextSegment} disabled={currentSegment >= routeSegments.length}>
+              Next School
+            </button>
+          </div>
+          <h3>Total Distance: {(totalDistance/1000).toFixed(3)} km</h3>
         </div>
-        
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={center}
-          zoom={12}
-        >
+
+        <GoogleMap mapContainerStyle={{ width: "100%", minheight: "100vh" }} center={center} zoom={12}>
           {schools.map((school) => (
             <Marker key={school.name} position={{ lat: school.lat, lng: school.lng }} />
           ))}
-
           {routeSegments.map((segment, index) => (
             <Polyline
               key={index}
@@ -216,7 +238,7 @@ const App = () => {
                 strokeColor: segment.isActive ? segment.color : "#CCCCCC", // Gray if not active
                 strokeOpacity: 1.0,
                 strokeWeight: 4,
-                zIndex: index + 1
+                zIndex: index + 1,
               }}
             />
           ))}
@@ -227,3 +249,4 @@ const App = () => {
 };
 
 export default App;
+
